@@ -55,7 +55,7 @@ IPV6_ADDR_REGEX = "(?:{}|{}|{})".format(IPV6_ADDR_REGEX_1, IPV6_ADDR_REGEX_2, IP
 
 MAC_REGEX = r"[a-fA-F0-9]{4}\.[a-fA-F0-9]{4}\.[a-fA-F0-9]{4}"
 VLAN_REGEX = r"\d{1,4}"
-INT_REGEX = r"(^\w{1,2}\d{1,3}/\d{1,2}|^\w{1,2}\d{1,3})"
+INT_REGEX = r"^\D{1,2}\d{1,3}/\d{1,2}|^\D{1,2}\d{1,3}"
 RE_IPADDR = re.compile(r"{}".format(IP_ADDR_REGEX))
 RE_IPADDR_STRIP = re.compile(r"({})\n".format(IP_ADDR_REGEX))
 RE_MAC = re.compile(r"{}".format(MAC_REGEX))
@@ -637,9 +637,10 @@ class IOSDriver(NetworkDriver):
 
             port = canonical_interface_name(int_brief)
 
-            port_detail = {
-                'physical_channels': {'channel': []}
-            }
+            port_detail = {}
+
+            port_detail['physical_channels'] = {}
+            port_detail['physical_channels']['channel'] = []
 
             # If interface is shutdown it returns "N/A" as output power.
             # Converting that to -100.0 float
@@ -1869,18 +1870,22 @@ class IOSDriver(NetworkDriver):
             """
             Return proper data for mac address fields.
             """
+            # Check for phy and '-' in 'vlan'
+            # DISCUSS: Should the 'vlan' field be standardized for return somehow?
+            if re.search(INT_REGEX, str(vlan)):
+                # THIS IS JANKY. Output shows canonical AND abbreviated output in 'interface'
+                # Used in 4500_format3
+                interface = canonical_interface_name(vlan)
+                vlan = -1
+            elif '-' in str(vlan) or 'N/A' in str(vlan):
+                vlan = 0
+
             # Non-dynamic type handler
             if mac_type.lower() in ['self', 'static', 'system']:
                 static = True
-                if vlan.lower() == 'all':
+                if str(vlan).lower() == 'all':
                     vlan = 0
-                # Check for phy and '-' in 'vlan'
-                # DISCUSS: Can the 'vlan' field be standardized for return?
-                if re.search(INT_REGEX, str(vlan)):
-                    interface = vlan
-                    vlan = -1
-                if '-' in str(vlan):
-                    vlan = 0
+
                 # Checking for Router, Switch or CPU in the interface field
                 if interface.lower() == 'cpu' or re.search(r'router', interface.lower()) or \
                         re.search(r'switch', interface.lower()):
@@ -1888,13 +1893,6 @@ class IOSDriver(NetworkDriver):
             # Other types...
             else:
                 static = False
-                # Check for phy and '-' in 'vlan'
-                # DISCUSS: Can the 'vlan' field be standardized for return?
-                if re.search(INT_REGEX, vlan):
-                    interface = vlan
-                    vlan = -1
-                if '-' in str(vlan):
-                    vlan = 0
 
             return {
                 'mac': napalm.base.helpers.mac(mac),
