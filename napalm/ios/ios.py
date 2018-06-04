@@ -1861,7 +1861,7 @@ class IOSDriver(NetworkDriver):
 
         mac_address_table = []
         header_indices = {}
-        vlan = mac = mac_type = interface = ''
+        vlan = mac = mac_type = ''
 
         command = IOS_COMMANDS['show_mac_address']
         output = self._send_command(command)
